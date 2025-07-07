@@ -91,3 +91,15 @@ local teleportService = game:GetService("TeleportService")
 teleportService:Teleport(gamePlaceId, player)
 
 end)
+
+local Section = Window:NewSection("My Team")
+
+Section:CreateButton("TGMANKASKE", function()
+print("tgmankaske")
+
+end)
+
+Section:CreateButton("Davitrollz", function()
+print("Davitrollz")
+
+end)
