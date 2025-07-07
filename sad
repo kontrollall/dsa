@@ -92,6 +92,7 @@ teleportService:Teleport(gamePlaceId, player)
 
 end)
 
+local Window = Library:NewWindow("See my team")
 local Section = Window:NewSection("Team")
 
 Section:CreateButton("TGMANKASKE", function()
