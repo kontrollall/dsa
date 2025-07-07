@@ -12,8 +12,7 @@ Section:CreateButton("Boost Speed", function()
  
 local player = game.Players.LocalPlayer
 local humanoid = player.Character.Humanoid
- 
--- Set the walk speed to a high value
+
 humanoid.WalkSpeed = 42
  
 end)
@@ -107,16 +106,17 @@ end)
 
 local Section = Window:NewSection("Links")
  
-Tab:CreateButton("Discord Group", function()
-print("HI")
+Section:CreateButton("Discord Group", function()
+print("Davitrollz")
+
  
 setclipboard("https://discord.gg/8A6k73JqCM")
 toclipboard("https://discord.gg/8A6k73JqCM")
  
 end)
  
-Tab:CreateButton("Youtube", function()
-print("HI")
+Section:CreateButton("Youtube", function()
+print("Davitrollz")
  
 setclipboard("https://www.youtube.com/@TGMANKASKE")
 toclipboard("https://www.youtube.com/@TGMANKASKE")
