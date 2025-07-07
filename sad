@@ -3,8 +3,8 @@ local tweenInfo = TweenInfo.new(1, Enum.EasingStyle.Linear)
 local lp = game.Players.LocalPlayer
 local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/bloodball/-back-ups-for-libs/main/wizard"))()
 
-local Window = Library:NewWindow("Script")
-local Section = Window:NewSection("Credits: TGMANKASKE")
+local Window = Library:NewWindow("Credits: TGMANKASKE")
+local Section = Window:NewSection("Boosts")
 
 local savedPos = nil
 
@@ -49,7 +49,9 @@ end)
 local savedPos = nil
 local speed = 38
 
-Section:CreateButton("Save Position", function()
+local Section = Window:NewSection("Teleports")
+
+Section:CreateButton("Save Base Position", function()
     local hrp = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
     if hrp then
         savedPos = hrp.Position
@@ -71,10 +73,21 @@ Section:CreateButton("Go to Saved Position", function()
     end
 end)
 
+local Section = Window:NewSection("Extras")
+
 Section:CreateButton("Server Hope", function()
 
 local module = loadstring(game:HttpGet"https://raw.githubusercontent.com/LeoKholYt/roblox/main/lk_serverhop.lua")()
 
 module:Teleport(game.PlaceId)
+
+end)
+
+Section:CreateButton("Rejoin", function()
+
+local player = game.Players.LocalPlayer
+local gamePlaceId = game.PlaceId
+local teleportService = game:GetService("TeleportService")
+teleportService:Teleport(gamePlaceId, player)
 
 end)
