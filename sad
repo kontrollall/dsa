@@ -104,3 +104,21 @@ Section:CreateButton("Davitrollz", function()
 print("Davitrollz")
 
 end)
+
+local Section = Window:NewSection("Links")
+ 
+Tab:CreateButton("Discord Group", function()
+print("HI")
+ 
+setclipboard("https://discord.gg/8A6k73JqCM")
+toclipboard("https://discord.gg/8A6k73JqCM")
+ 
+end)
+ 
+Tab:CreateButton("Youtube", function()
+print("HI")
+ 
+setclipboard("https://www.youtube.com/@TGMANKASKE")
+toclipboard("https://www.youtube.com/@TGMANKASKE")
+ 
+end)
