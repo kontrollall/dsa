@@ -1,124 +1,107 @@
-local ts = game:GetService("TweenService")
-local tweenInfo = TweenInfo.new(1, Enum.EasingStyle.Linear)
-local lp = game.Players.LocalPlayer
-local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/bloodball/-back-ups-for-libs/main/wizard"))()
-
-local Window = Library:NewWindow("Credits: TGMANKASKE")
-local Section = Window:NewSection("Boosts")
-
-local savedPos = nil
-
-Section:CreateButton("Boost Speed", function()
+local Library = loadstring(Game:HttpGet("https://raw.githubusercontent.com/bloodball/-back-ups-for-libs/main/wizard"))()
+local Window = Library:NewWindow("Script")
  
+local Tab = Window:NewSection("Credits: TGMANKASKE")
+
+Tab:CreateButton("Discord Group", function()
+
 local player = game.Players.LocalPlayer
-local humanoid = player.Character.Humanoid
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
 
-humanoid.WalkSpeed = 42
- 
+local UserInputService = game:GetService("UserInputService")
+
+local savedPosition = nil
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.P then
+        savedPosition = humanoidRootPart.Position
+        print("Posição salva:", savedPosition)
+    end
 end)
 
-Section:CreateButton("Boost Jump", function()
+-- Para outros scripts acessarem a posição salva, você pode armazenar isso num Value no Player, por exemplo:
+local savedPosValue = Instance.new("Vector3Value")
+savedPosValue.Name = "SavedPosition"
+savedPosValue.Value = Vector3.new(0,0,0)
+savedPosValue.Parent = player
 
-local players = game:GetService("Players")
-local lp = players.LocalPlayer
- 
-local jumpPower = 72
- 
-local function applyJump()
-    local char = lp.Character
-    if not char then return end
-    local humanoid = char:FindFirstChildOfClass("Humanoid")
-    if humanoid then
-        humanoid.UseJumpPower = true
-        humanoid.JumpPower = jumpPower
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.P then
+        savedPosValue.Value = humanoidRootPart.Position
+        print("Posição salva no Value:", savedPosValue.Value)
     end
+end)
+
+end)
+
+
+
+Tab:CreateButton("Discord Group", function()
+
+local player = game.Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+local humanoid = character:WaitForChild("Humanoid")
+
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+local savedPosValue = player:WaitForChild("SavedPosition")
+
+local moving = false
+local speed = 50 -- velocidade ajustável (está em studs por segundo)
+local hoverHeight = 30 -- altura para subir antes de se mover horizontalmente
+
+local function lerp(a, b, t)
+    return a + (b - a) * t
 end
- 
-game:GetService("RunService").RenderStepped:Connect(function()
-    applyJump()
-end)
- 
-lp.CharacterAdded:Connect(function()
-    repeat wait() until lp.Character and lp.Character:FindFirstChildOfClass("Humanoid")
-    wait(0.5)
-end)
 
-end)
+local function moveToPosition(targetPos)
+    moving = true
 
-local savedPos = nil
-local speed = 38
+    -- Passo 1: subir até hoverHeight acima da posição atual
+    local startPos = humanoidRootPart.Position
+    local upTarget = Vector3.new(startPos.X, startPos.Y + hoverHeight, startPos.Z)
+    
+    while (humanoidRootPart.Position - upTarget).Magnitude > 0.5 do
+        local direction = (upTarget - humanoidRootPart.Position).Unit
+        humanoidRootPart.Velocity = direction * speed
+        RunService.Heartbeat:Wait()
+    end
+    
+    -- Passo 2: mover horizontalmente até acima do target (mesma altura hoverHeight)
+    local horizontalTarget = Vector3.new(targetPos.X, upTarget.Y, targetPos.Z)
+    
+    while (humanoidRootPart.Position - horizontalTarget).Magnitude > 0.5 do
+        local direction = (horizontalTarget - humanoidRootPart.Position).Unit
+        humanoidRootPart.Velocity = direction * speed
+        RunService.Heartbeat:Wait()
+    end
+    
+    -- Passo 3: descer até o target
+    while (humanoidRootPart.Position - targetPos).Magnitude > 0.5 do
+        local direction = (targetPos - humanoidRootPart.Position).Unit
+        humanoidRootPart.Velocity = direction * speed
+        RunService.Heartbeat:Wait()
+    end
 
-local Section = Window:NewSection("Teleports")
+    -- Para o movimento
+    humanoidRootPart.Velocity = Vector3.new(0, 0, 0)
+    moving = false
+end
 
-Section:CreateButton("Save Base Position", function()
-    local hrp = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
-    if hrp then
-        savedPos = hrp.Position
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.O then
+        if not moving and savedPosValue.Value.Magnitude > 0 then
+            coroutine.wrap(function()
+                moveToPosition(savedPosValue.Value)
+            end)()
+        end
     end
 end)
 
-Section:CreateButton("Go to Saved Position", function()
-    local char = lp.Character
-    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-
-    if savedPos and hrp then
-        local distance = (hrp.Position - savedPos).Magnitude
-        local duration = distance / speed
-
-        local tweenInfo = TweenInfo.new(duration, Enum.EasingStyle.Linear)
-        local cf = CFrame.new(savedPos)
-        local tween = ts:Create(hrp, tweenInfo, {CFrame = cf})
-        tween:Play()
-    end
-end)
-
-local Section = Window:NewSection("Extras")
-
-Section:CreateButton("Server Hope", function()
-
-local module = loadstring(game:HttpGet"https://raw.githubusercontent.com/LeoKholYt/roblox/main/lk_serverhop.lua")()
-
-module:Teleport(game.PlaceId)
-
-end)
-
-Section:CreateButton("Rejoin", function()
-
-local player = game.Players.LocalPlayer
-local gamePlaceId = game.PlaceId
-local teleportService = game:GetService("TeleportService")
-teleportService:Teleport(gamePlaceId, player)
-
-end)
-
-local Window = Library:NewWindow("See my team")
-local Section = Window:NewSection("Team")
-
-Section:CreateButton("TGMANKASKE", function()
-print("tgmankaske")
-
-end)
-
-Section:CreateButton("Davitrollz", function()
-print("Davitrollz")
-
-end)
-
-local Section = Window:NewSection("Links")
- 
-Section:CreateButton("Discord Group", function()
-print("Davitrollz")
-
- 
-setclipboard("https://discord.gg/8A6k73JqCM")
-toclipboard("https://discord.gg/8A6k73JqCM")
- 
-end)
- 
-Section:CreateButton("Youtube", function()
-print("Davitrollz")
- 
-setclipboard("https://www.youtube.com/@TGMANKASKE")
-toclipboard("https://www.youtube.com/@TGMANKASKE")
- 
 end)
