@@ -1,94 +1,260 @@
-local Library = loadstring(Game:HttpGet("https://raw.githubusercontent.com/bloodball/-back-ups-for-libs/main/wizard"))()
-local Window = Library:NewWindow("Script")
- 
-local Tab = Window:NewSection("Credits: TGMANKASKE")
-
-Tab:CreateButton("Discord Group", function()
-
-local player = game.Players.LocalPlayer
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local savedPositionValue = Instance.new("Vector3Value")
-savedPositionValue.Name = "SavedPosition"
-savedPositionValue.Value = Vector3.new(0, 0, 0)
-savedPositionValue.Parent = player
-
+local player = Players.LocalPlayer
 local character = player.Character or player.CharacterAdded:Wait()
-local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+local hrp = character:WaitForChild("HumanoidRootPart")
 
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    if input.KeyCode == Enum.KeyCode.P then
-        savedPositionValue.Value = humanoidRootPart.Position
-        print("Posição salva:", savedPositionValue.Value)
-    end
-end)
+-- Configuração inicial
+local MAX_OBJECTS = 30
+local UPDATE_TIME = 2
+local MAX_DISTANCE = 200
 
+-- Criar ScreenGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "NearbyObjectsSimple"
+screenGui.Parent = player:WaitForChild("PlayerGui")
+screenGui.ResetOnSpawn = false
 
-end)
+-- Frame principal
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 300, 0, 400)
+mainFrame.Position = UDim2.new(1, -310, 0.5, -200)
+mainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+mainFrame.BorderSizePixel = 0
+mainFrame.Parent = screenGui
 
+-- Título
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 35)
+title.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+title.Text = "Objetos Próximos"
+title.Font = Enum.Font.GothamBold
+title.TextSize = 20
+title.TextColor3 = Color3.new(1, 1, 1)
+title.Parent = mainFrame
 
+-- Dropdown para filtro
+local filterLabel = Instance.new("TextLabel")
+filterLabel.Text = "Filtro:"
+filterLabel.Size = UDim2.new(0, 45, 0, 25)
+filterLabel.Position = UDim2.new(0, 10, 0, 40)
+filterLabel.BackgroundTransparency = 1
+filterLabel.TextColor3 = Color3.new(1,1,1)
+filterLabel.Font = Enum.Font.Gotham
+filterLabel.TextSize = 14
+filterLabel.Parent = mainFrame
 
-Tab:CreateButton("Discord Group", function()
+local filterDropdown = Instance.new("TextButton")
+filterDropdown.Text = "Todos"
+filterDropdown.Size = UDim2.new(0, 100, 0, 25)
+filterDropdown.Position = UDim2.new(0, 60, 0, 40)
+filterDropdown.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+filterDropdown.TextColor3 = Color3.new(1, 1, 1)
+filterDropdown.Font = Enum.Font.Gotham
+filterDropdown.TextSize = 14
+filterDropdown.Parent = mainFrame
 
-local player = game.Players.LocalPlayer
-local TweenService = game:GetService("TweenService")
-local UserInputService = game:GetService("UserInputService")
+local dropdownFrame = Instance.new("Frame")
+dropdownFrame.Size = UDim2.new(0, 100, 0, 75)
+dropdownFrame.Position = UDim2.new(0, 60, 0, 65)
+dropdownFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+dropdownFrame.Visible = false
+dropdownFrame.Parent = mainFrame
 
-local character = player.Character or player.CharacterAdded:Wait()
-local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
-local savedPositionValue = player:WaitForChild("SavedPosition")
+local options = {"Todos", "BaseParts", "Models"}
 
-local moving = false
-local hoverHeight = 30 -- altura para subir
-local speed = 50       -- velocidade em studs por segundo
+for i, option in pairs(options) do
+    local optBtn = Instance.new("TextButton")
+    optBtn.Size = UDim2.new(1, 0, 0, 25)
+    optBtn.Position = UDim2.new(0, 0, 0, (i-1)*25)
+    optBtn.BackgroundColor3 = Color3.fromRGB(55, 55, 55)
+    optBtn.TextColor3 = Color3.new(1, 1, 1)
+    optBtn.Font = Enum.Font.Gotham
+    optBtn.TextSize = 14
+    optBtn.Text = option
+    optBtn.Parent = dropdownFrame
 
-local function createTween(targetCFrame, duration)
-    local tweenInfo = TweenInfo.new(duration, Enum.EasingStyle.Linear)
-    return TweenService:Create(humanoidRootPart, tweenInfo, {CFrame = targetCFrame})
+    optBtn.MouseButton1Click:Connect(function()
+        filterDropdown.Text = option
+        dropdownFrame.Visible = false
+    end)
 end
 
-local function gotoPosition(targetPos)
-    if moving then return end
-    moving = true
+filterDropdown.MouseButton1Click:Connect(function()
+    dropdownFrame.Visible = not dropdownFrame.Visible
+end)
 
-    local startPos = humanoidRootPart.Position
-    local upPos = Vector3.new(startPos.X, startPos.Y + hoverHeight, startPos.Z)
-    local hoverCFrame = CFrame.new(upPos)
-    local targetHoverPos = Vector3.new(targetPos.X, upPos.Y, targetPos.Z)
-    local targetHoverCFrame = CFrame.new(targetHoverPos)
-    local targetCFrame = CFrame.new(targetPos)
+-- Distância máxima input
+local distLabel = Instance.new("TextLabel")
+distLabel.Text = "Distância:"
+distLabel.Size = UDim2.new(0, 70, 0, 25)
+distLabel.Position = UDim2.new(0, 10, 0, 145)
+distLabel.BackgroundTransparency = 1
+distLabel.TextColor3 = Color3.new(1,1,1)
+distLabel.Font = Enum.Font.Gotham
+distLabel.TextSize = 14
+distLabel.Parent = mainFrame
 
-    local upDist = (upPos - startPos).Magnitude
-    local horizDist = (targetHoverPos - upPos).Magnitude
-    local downDist = (targetPos - targetHoverPos).Magnitude
+local distInput = Instance.new("TextBox")
+distInput.Size = UDim2.new(0, 60, 0, 25)
+distInput.Position = UDim2.new(0, 90, 0, 145)
+distInput.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+distInput.TextColor3 = Color3.new(1, 1, 1)
+distInput.Font = Enum.Font.Gotham
+distInput.TextSize = 14
+distInput.Text = tostring(MAX_DISTANCE)
+distInput.ClearTextOnFocus = false
+distInput.Parent = mainFrame
 
-    local upTween = createTween(hoverCFrame, upDist / speed)
-    local horizTween = createTween(targetHoverCFrame, horizDist / speed)
-    local downTween = createTween(targetCFrame, downDist / speed)
-
-    upTween:Play()
-    upTween.Completed:Wait()
-
-    horizTween:Play()
-    horizTween.Completed:Wait()
-
-    downTween:Play()
-    downTween.Completed:Wait()
-
-    moving = false
-end
-
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    if input.KeyCode == Enum.KeyCode.O then
-        local targetPos = savedPositionValue.Value
-        if targetPos.Magnitude > 0 then
-            gotoPosition(targetPos)
+distInput.FocusLost:Connect(function(enterPressed)
+    if enterPressed then
+        local val = tonumber(distInput.Text)
+        if val and val > 0 then
+            MAX_DISTANCE = val
         else
-            warn("Nenhuma posição salva.")
+            distInput.Text = tostring(MAX_DISTANCE)
         end
     end
 end)
 
+-- ScrollFrame para lista
+local scrollFrame = Instance.new("ScrollingFrame")
+scrollFrame.Size = UDim2.new(1, -20, 1, -190)
+scrollFrame.Position = UDim2.new(0, 10, 0, 180)
+scrollFrame.BackgroundTransparency = 1
+scrollFrame.BorderSizePixel = 0
+scrollFrame.ScrollBarThickness = 8
+scrollFrame.Parent = mainFrame
 
+local uiListLayout = Instance.new("UIListLayout")
+uiListLayout.Padding = UDim.new(0, 5)
+uiListLayout.Parent = scrollFrame
+
+-- Highlight
+local highlight = Instance.new("Highlight")
+highlight.Parent = workspace
+highlight.Adornee = nil
+highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+highlight.FillTransparency = 0.5
+highlight.OutlineTransparency = 0.3
+
+-- Funções
+local function getFullPath(obj)
+    local t = {}
+    while obj and obj.Parent do
+        table.insert(t, 1, obj.Name)
+        obj = obj.Parent
+    end
+    return table.concat(t, ".")
+end
+
+local function getCenter(obj)
+    if obj:IsA("BasePart") then
+        return obj.Position
+    elseif obj:IsA("Model") then
+        if obj.PrimaryPart then return obj.PrimaryPart.Position end
+        local parts = obj:GetChildren()
+        local sum = Vector3.new()
+        local count = 0
+        for _, c in pairs(parts) do
+            if c:IsA("BasePart") then
+                sum += c.Position
+                count += 1
+            end
+        end
+        if count > 0 then
+            return sum / count
+        end
+    end
+    return nil
+end
+
+local function isAllowed(obj)
+    if filterDropdown.Text == "BaseParts" then
+        return obj:IsA("BasePart")
+    elseif filterDropdown.Text == "Models" then
+        return obj:IsA("Model") and obj.PrimaryPart
+    end
+    return obj:IsA("BasePart") or (obj:IsA("Model") and obj.PrimaryPart)
+end
+
+local function clearList()
+    for _, child in pairs(scrollFrame:GetChildren()) do
+        if child:IsA("TextButton") then
+            child:Destroy()
+        end
+    end
+end
+
+local function updateList()
+    clearList()
+    local objects = {}
+
+    local function search(parent)
+        for _, obj in pairs(parent:GetChildren()) do
+            if isAllowed(obj) then
+                local pos = getCenter(obj)
+                if pos then
+                    local dist = (hrp.Position - pos).Magnitude
+                    if dist <= MAX_DISTANCE then
+                        table.insert(objects, {obj=obj, dist=dist})
+                    end
+                end
+            end
+            if obj:IsA("Model") then
+                search(obj)
+            end
+        end
+    end
+
+    search(workspace)
+
+    table.sort(objects, function(a,b) return a.dist < b.dist end)
+
+    local maxItems = math.min(#objects, MAX_OBJECTS)
+
+    for i = 1, maxItems do
+        local data = objects[i]
+        local obj = data.obj
+        local dist = data.dist
+
+        local btn = Instance.new("TextButton")
+        btn.Size = UDim2.new(1, 0, 0, 30)
+        btn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+        btn.TextColor3 = Color3.new(1, 1, 1)
+        btn.Font = Enum.Font.Gotham
+        btn.TextSize = 16
+        btn.TextXAlignment = Enum.TextXAlignment.Left
+        btn.Text = string.format("%s (%.1f)", obj.Name, dist)
+        btn.Parent = scrollFrame
+
+        local path = getFullPath(obj)
+
+        btn.MouseEnter:Connect(function()
+            btn.BackgroundColor3 = Color3.fromRGB(65, 65, 65)
+        end)
+        btn.MouseLeave:Connect(function()
+            btn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+        end)
+
+        btn.MouseButton1Click:Connect(function()
+            highlight.Adornee = obj
+            if setclipboard then
+                setclipboard(path)
+                btn.Text = obj.Name .. " (Copiado!)"
+                task.delay(1.5, function()
+                    btn.Text = string.format("%s (%.1f)", obj.Name, dist)
+                end)
+            end
+        end)
+    end
+end
+
+-- Atualiza a lista a cada 2 segundos
+task.spawn(function()
+    while true do
+        updateList()
+        task.wait(UPDATE_TIME)
+    end
 end)
