@@ -6,34 +6,23 @@ local Tab = Window:NewSection("Credits: TGMANKASKE")
 Tab:CreateButton("Discord Group", function()
 
 local player = game.Players.LocalPlayer
+local UserInputService = game:GetService("UserInputService")
+local savedPositionValue = Instance.new("Vector3Value")
+savedPositionValue.Name = "SavedPosition"
+savedPositionValue.Value = Vector3.new(0, 0, 0)
+savedPositionValue.Parent = player
+
 local character = player.Character or player.CharacterAdded:Wait()
 local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
 
-local UserInputService = game:GetService("UserInputService")
-
-local savedPosition = nil
-
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
     if input.KeyCode == Enum.KeyCode.P then
-        savedPosition = humanoidRootPart.Position
-        print("Posição salva:", savedPosition)
+        savedPositionValue.Value = humanoidRootPart.Position
+        print("Posição salva:", savedPositionValue.Value)
     end
 end)
 
--- Para outros scripts acessarem a posição salva, você pode armazenar isso num Value no Player, por exemplo:
-local savedPosValue = Instance.new("Vector3Value")
-savedPosValue.Name = "SavedPosition"
-savedPosValue.Value = Vector3.new(0,0,0)
-savedPosValue.Parent = player
-
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    if input.KeyCode == Enum.KeyCode.P then
-        savedPosValue.Value = humanoidRootPart.Position
-        print("Posição salva no Value:", savedPosValue.Value)
-    end
-end)
 
 end)
 
@@ -42,66 +31,64 @@ end)
 Tab:CreateButton("Discord Group", function()
 
 local player = game.Players.LocalPlayer
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+
 local character = player.Character or player.CharacterAdded:Wait()
 local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
-local humanoid = character:WaitForChild("Humanoid")
-
-local UserInputService = game:GetService("UserInputService")
-local RunService = game:GetService("RunService")
-
-local savedPosValue = player:WaitForChild("SavedPosition")
+local savedPositionValue = player:WaitForChild("SavedPosition")
 
 local moving = false
-local speed = 50 -- velocidade ajustável (está em studs por segundo)
-local hoverHeight = 30 -- altura para subir antes de se mover horizontalmente
+local hoverHeight = 30 -- altura para subir
+local speed = 50       -- velocidade em studs por segundo
 
-local function lerp(a, b, t)
-    return a + (b - a) * t
+local function createTween(targetCFrame, duration)
+    local tweenInfo = TweenInfo.new(duration, Enum.EasingStyle.Linear)
+    return TweenService:Create(humanoidRootPart, tweenInfo, {CFrame = targetCFrame})
 end
 
-local function moveToPosition(targetPos)
+local function gotoPosition(targetPos)
+    if moving then return end
     moving = true
 
-    -- Passo 1: subir até hoverHeight acima da posição atual
     local startPos = humanoidRootPart.Position
-    local upTarget = Vector3.new(startPos.X, startPos.Y + hoverHeight, startPos.Z)
-    
-    while (humanoidRootPart.Position - upTarget).Magnitude > 0.5 do
-        local direction = (upTarget - humanoidRootPart.Position).Unit
-        humanoidRootPart.Velocity = direction * speed
-        RunService.Heartbeat:Wait()
-    end
-    
-    -- Passo 2: mover horizontalmente até acima do target (mesma altura hoverHeight)
-    local horizontalTarget = Vector3.new(targetPos.X, upTarget.Y, targetPos.Z)
-    
-    while (humanoidRootPart.Position - horizontalTarget).Magnitude > 0.5 do
-        local direction = (horizontalTarget - humanoidRootPart.Position).Unit
-        humanoidRootPart.Velocity = direction * speed
-        RunService.Heartbeat:Wait()
-    end
-    
-    -- Passo 3: descer até o target
-    while (humanoidRootPart.Position - targetPos).Magnitude > 0.5 do
-        local direction = (targetPos - humanoidRootPart.Position).Unit
-        humanoidRootPart.Velocity = direction * speed
-        RunService.Heartbeat:Wait()
-    end
+    local upPos = Vector3.new(startPos.X, startPos.Y + hoverHeight, startPos.Z)
+    local hoverCFrame = CFrame.new(upPos)
+    local targetHoverPos = Vector3.new(targetPos.X, upPos.Y, targetPos.Z)
+    local targetHoverCFrame = CFrame.new(targetHoverPos)
+    local targetCFrame = CFrame.new(targetPos)
 
-    -- Para o movimento
-    humanoidRootPart.Velocity = Vector3.new(0, 0, 0)
+    local upDist = (upPos - startPos).Magnitude
+    local horizDist = (targetHoverPos - upPos).Magnitude
+    local downDist = (targetPos - targetHoverPos).Magnitude
+
+    local upTween = createTween(hoverCFrame, upDist / speed)
+    local horizTween = createTween(targetHoverCFrame, horizDist / speed)
+    local downTween = createTween(targetCFrame, downDist / speed)
+
+    upTween:Play()
+    upTween.Completed:Wait()
+
+    horizTween:Play()
+    horizTween.Completed:Wait()
+
+    downTween:Play()
+    downTween.Completed:Wait()
+
     moving = false
 end
 
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
     if input.KeyCode == Enum.KeyCode.O then
-        if not moving and savedPosValue.Value.Magnitude > 0 then
-            coroutine.wrap(function()
-                moveToPosition(savedPosValue.Value)
-            end)()
+        local targetPos = savedPositionValue.Value
+        if targetPos.Magnitude > 0 then
+            gotoPosition(targetPos)
+        else
+            warn("Nenhuma posição salva.")
         end
     end
 end)
+
 
 end)
