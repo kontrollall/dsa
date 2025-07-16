@@ -1,119 +1,128 @@
+-- Serviços essenciais
 local Players = game:GetService("Players")
 local MarketplaceService = game:GetService("MarketplaceService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
 
--- Cria RemoteFunction para o cliente requisitar a lista de Developer Products
-local fetchProducts = ReplicatedStorage:FindFirstChild("FetchDevProducts")
+-- RemoteFunction para buscar Developer Products
+local FETCH_PRODUCTS_NAME = "FetchDevProducts"
+local fetchProducts = ReplicatedStorage:FindFirstChild(FETCH_PRODUCTS_NAME)
 if not fetchProducts then
     fetchProducts = Instance.new("RemoteFunction")
-    fetchProducts.Name = "FetchDevProducts"
+    fetchProducts.Name = FETCH_PRODUCTS_NAME
     fetchProducts.Parent = ReplicatedStorage
 end
 
--- Função para buscar produtos via API Roblox
+-- Função segura para buscar produtos via API Roblox
 local function getDeveloperProducts()
-    local productList = {}
+    local products = {}
     local universeId = game.GameId
-
     local url = string.format("https://apis.roblox.com/developergoods/v1/products?universeId=%d", universeId)
 
     local success, response = pcall(function()
         return HttpService:GetAsync(url, true)
     end)
 
-    if success and response then
-        local data = HttpService:JSONDecode(response)
-        if data and data.data then
-            for _, product in ipairs(data.data) do
-                table.insert(productList, {
-                    Name = product.name,
-                    Id = product.productId
-                })
-            end
-        else
-            warn("[FreeDevProductMenu] Resposta da API inválida ou vazia.")
-        end
-    else
-        warn("[FreeDevProductMenu] Erro ao buscar Developer Products: "..tostring(response))
+    if not success then
+        warn("[DevProductMenu] Falha ao buscar produtos da API:", response)
+        return products
     end
 
-    return productList
+    local data
+    local ok, decodeErr = pcall(function()
+        data = HttpService:JSONDecode(response)
+    end)
+
+    if not ok or type(data) ~= "table" or type(data.data) ~= "table" then
+        warn("[DevProductMenu] Resposta da API inválida ou malformada.")
+        return products
+    end
+
+    for _, product in ipairs(data.data) do
+        if type(product.name) == "string" and type(product.productId) == "number" then
+            table.insert(products, {
+                Name = product.name,
+                Id = product.productId
+            })
+        else
+            warn("[DevProductMenu] Produto inválido na resposta da API.")
+        end
+    end
+
+    return products
 end
 
 fetchProducts.OnServerInvoke = function(player)
+    -- Pode-se adicionar checagens de permissão aqui
     return getDeveloperProducts()
 end
 
--- Código do LocalScript com UI aprimorada
+
+-- Código do LocalScript aprimorado (como string para injection)
 local localScriptSource = [[
     local Players = game:GetService("Players")
     local MarketplaceService = game:GetService("MarketplaceService")
     local ReplicatedStorage = game:GetService("ReplicatedStorage")
     local TweenService = game:GetService("TweenService")
+    local RunService = game:GetService("RunService")
 
     local player = Players.LocalPlayer
     local playerGui = player:WaitForChild("PlayerGui")
     local fetchProducts = ReplicatedStorage:WaitForChild("FetchDevProducts")
 
-    -- Remove UI antiga se existir
+    -- Remove UI antiga (prevenir múltiplas UIs)
     local oldGui = playerGui:FindFirstChild("DevProductUI")
     if oldGui then oldGui:Destroy() end
 
-    -- Criação da UI principal
+    -- UI básica
     local screenGui = Instance.new("ScreenGui")
     screenGui.Name = "DevProductUI"
     screenGui.Parent = playerGui
     screenGui.ResetOnSpawn = false
 
-    -- Fundo semi-transparente para focar UI
     local background = Instance.new("Frame")
     background.Size = UDim2.new(1, 0, 1, 0)
-    background.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    background.BackgroundColor3 = Color3.new(0,0,0)
     background.BackgroundTransparency = 0.6
     background.Parent = screenGui
 
-    -- Frame central elegante
     local mainFrame = Instance.new("Frame")
     mainFrame.Size = UDim2.new(0, 360, 0, 480)
-    mainFrame.Position = UDim2.new(0.5, -180, 0.5, -240)
+    mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+    mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
     mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
     mainFrame.BorderSizePixel = 0
-    mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
     mainFrame.Parent = screenGui
     mainFrame.ClipsDescendants = true
-    mainFrame.AutomaticSize = Enum.AutomaticSize.None
-    mainFrame.Name = "MainFrame"
-    mainFrame.BackgroundTransparency = 0
 
-    -- Título com estilo
+    -- Título
     local title = Instance.new("TextLabel")
     title.Size = UDim2.new(1, 0, 0, 50)
     title.BackgroundTransparency = 1
     title.Font = Enum.Font.GothamBold
     title.TextSize = 30
-    title.TextColor3 = Color3.fromRGB(230, 230, 230)
+    title.TextColor3 = Color3.fromRGB(230,230,230)
     title.Text = "Developer Products Store"
     title.Parent = mainFrame
     title.TextStrokeTransparency = 0.8
     title.TextWrapped = true
 
-    -- Linha decorativa abaixo do título
+    -- Linha decorativa
     local line = Instance.new("Frame")
     line.Size = UDim2.new(1, -40, 0, 2)
     line.Position = UDim2.new(0, 20, 0, 50)
     line.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
     line.Parent = mainFrame
 
-    -- Container para os produtos com Scroll
+    -- ScrollFrame para lista de produtos
     local scrollFrame = Instance.new("ScrollingFrame")
     scrollFrame.Size = UDim2.new(1, -40, 1, -130)
     scrollFrame.Position = UDim2.new(0, 20, 0, 60)
-    scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
-    scrollFrame.ScrollBarThickness = 10
-    scrollFrame.BorderSizePixel = 0
+    scrollFrame.BackgroundColor3 = Color3.fromRGB(15,15,15)
     scrollFrame.BackgroundTransparency = 0.3
-    scrollFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+    scrollFrame.BorderSizePixel = 0
+    scrollFrame.ScrollBarThickness = 10
+    scrollFrame.CanvasSize = UDim2.new(0,0,0,0)
     scrollFrame.Parent = mainFrame
 
     local listLayout = Instance.new("UIListLayout")
@@ -122,51 +131,48 @@ local localScriptSource = [[
     listLayout.Parent = scrollFrame
 
     local padding = Instance.new("UIPadding")
-    padding.PaddingTop = UDim.new(0, 10)
-    padding.PaddingLeft = UDim.new(0, 5)
-    padding.PaddingRight = UDim.new(0, 5)
+    padding.PaddingTop = UDim.new(0,10)
+    padding.PaddingLeft = UDim.new(0,5)
+    padding.PaddingRight = UDim.new(0,5)
     padding.Parent = scrollFrame
 
-    -- Container inferior para controles
+    -- Container inferior
     local bottomFrame = Instance.new("Frame")
     bottomFrame.Size = UDim2.new(1, 0, 0, 60)
     bottomFrame.Position = UDim2.new(0, 0, 1, -60)
     bottomFrame.BackgroundTransparency = 1
     bottomFrame.Parent = mainFrame
 
-    -- Label para produto selecionado
     local selectedLabel = Instance.new("TextLabel")
     selectedLabel.Size = UDim2.new(0.6, 0, 1, 0)
     selectedLabel.BackgroundTransparency = 1
     selectedLabel.Font = Enum.Font.GothamSemibold
     selectedLabel.TextSize = 18
     selectedLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-    selectedLabel.Text = "Nenhum produto selecionado"
     selectedLabel.TextXAlignment = Enum.TextXAlignment.Left
+    selectedLabel.Text = "Nenhum produto selecionado"
     selectedLabel.Parent = bottomFrame
 
-    -- Botão de Auto Buy
     local autoBuyBtn = Instance.new("TextButton")
     autoBuyBtn.Size = UDim2.new(0.35, 0, 1, 0)
     autoBuyBtn.Position = UDim2.new(0.65, 0, 0, 0)
-    autoBuyBtn.BackgroundColor3 = Color3.fromRGB(35, 110, 200)
+    autoBuyBtn.BackgroundColor3 = Color3.fromRGB(35,110,200)
     autoBuyBtn.AutoButtonColor = true
     autoBuyBtn.Font = Enum.Font.GothamBold
     autoBuyBtn.TextSize = 20
-    autoBuyBtn.TextColor3 = Color3.new(1, 1, 1)
+    autoBuyBtn.TextColor3 = Color3.new(1,1,1)
     autoBuyBtn.Text = "Iniciar Auto Buy"
     autoBuyBtn.Parent = bottomFrame
-    autoBuyBtn.ClipsDescendants = true
     autoBuyBtn.BorderSizePixel = 0
-    autoBuyBtn.Modal = true
+    autoBuyBtn.ClipsDescendants = true
 
-    -- Variables
+    -- Variáveis internas
     local products = {}
     local selectedProductId = nil
+    local selectedProductName = nil
     local autoBuyActive = false
-    local autoBuyConnection = nil
+    local autoBuyCoroutine = nil
 
-    -- Atualiza botão AutoBuy visual
     local function updateAutoBuyButton()
         if autoBuyActive then
             autoBuyBtn.Text = "Parar Auto Buy"
@@ -177,7 +183,6 @@ local localScriptSource = [[
         end
     end
 
-    -- Função para criar botão de produto
     local function createProductButton(product)
         local btn = Instance.new("TextButton")
         btn.Size = UDim2.new(1, 0, 0, 50)
@@ -202,39 +207,42 @@ local localScriptSource = [[
 
         btn.Parent = scrollFrame
 
-        -- Compra normal ao clicar
+        -- Compra normal ao clique simples
         btn.MouseButton1Click:Connect(function()
             MarketplaceService:PromptProductPurchase(player, product.Id)
         end)
 
-        -- Seleção para Auto Buy ao duplo clique
-        local lastClickTime = 0
+        -- Duplo clique para seleção de Auto Buy
+        local lastClick = 0
         btn.MouseButton1Click:Connect(function()
             local now = tick()
-            if now - lastClickTime < 0.4 then
+            if now - lastClick <= 0.4 then
                 selectedProductId = product.Id
-                selectedLabel.Text = "Produto selecionado para Auto Buy: " .. product.Name
+                selectedProductName = product.Name
+                selectedLabel.Text = "Produto selecionado para Auto Buy: " .. selectedProductName
                 updateAutoBuyButton()
             end
-            lastClickTime = now
+            lastClick = now
         end)
 
         return btn
     end
 
-    -- Atualiza lista de produtos
-    local function refreshProducts()
+    local function clearProductButtons()
         for _, child in ipairs(scrollFrame:GetChildren()) do
             if child:IsA("TextButton") then
                 child:Destroy()
             end
         end
+    end
 
+    local function refreshProducts()
+        clearProductButtons()
         local success, result = pcall(function()
             return fetchProducts:InvokeServer()
         end)
 
-        if success and result then
+        if success and type(result) == "table" then
             products = result
         else
             warn("[DevProductUI] Falha ao obter produtos: " .. tostring(result))
@@ -245,52 +253,55 @@ local localScriptSource = [[
             createProductButton(product)
         end
 
-        -- Ajustar CanvasSize baseado no conteúdo
+        -- Ajusta tamanho da canvas para o conteúdo
         local contentHeight = listLayout.AbsoluteContentSize.Y
         scrollFrame.CanvasSize = UDim2.new(0, 0, 0, contentHeight + 15)
     end
 
-    -- Função para iniciar/parar auto buy
-    local function toggleAutoBuy()
-        if autoBuyActive then
-            autoBuyActive = false
-            if autoBuyConnection then
-                autoBuyConnection:Disconnect()
-                autoBuyConnection = nil
-            end
-        else
-            if not selectedProductId then
-                warn("[DevProductUI] Nenhum produto selecionado para Auto Buy.")
-                return
-            end
-            autoBuyActive = true
-            -- Cria loop para comprar a cada 5 segundos
-            autoBuyConnection = game:GetService("RunService").Heartbeat:Connect(function(step)
-                -- Só faz a compra se o intervalo já passou (controlado por timer)
-                if not autoBuyActive then return end
-            end)
-
-            spawn(function()
-                while autoBuyActive do
-                    MarketplaceService:PromptProductPurchase(player, selectedProductId)
-                    wait(5)
-                end
-            end)
+    local function stopAutoBuy()
+        if autoBuyCoroutine then
+            coroutine.close(autoBuyCoroutine)
+            autoBuyCoroutine = nil
         end
+        autoBuyActive = false
         updateAutoBuyButton()
     end
 
-    autoBuyBtn.MouseButton1Click:Connect(toggleAutoBuy)
+    local function startAutoBuy()
+        if not selectedProductId then
+            warn("[DevProductUI] Nenhum produto selecionado para Auto Buy.")
+            return
+        end
 
-    -- Inicializa a UI
+        autoBuyActive = true
+        updateAutoBuyButton()
+
+        autoBuyCoroutine = coroutine.create(function()
+            while autoBuyActive do
+                MarketplaceService:PromptProductPurchase(player, selectedProductId)
+                wait(5)
+            end
+        end)
+        coroutine.resume(autoBuyCoroutine)
+    end
+
+    autoBuyBtn.MouseButton1Click:Connect(function()
+        if autoBuyActive then
+            stopAutoBuy()
+        else
+            startAutoBuy()
+        end
+    end)
+
+    -- Inicializa a UI e carrega produtos
     refreshProducts()
 ]]
 
+-- Injetar o LocalScript no PlayerGui de cada jogador que entra
 Players.PlayerAdded:Connect(function(player)
     player.CharacterAdded:Wait()
     local playerGui = player:WaitForChild("PlayerGui")
 
-    -- Injeta LocalScript no cliente
     local localScript = Instance.new("LocalScript")
     localScript.Name = "DevProductLocalScript"
     localScript.Source = localScriptSource
