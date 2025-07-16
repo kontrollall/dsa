@@ -1,9 +1,12 @@
+-- Script único para servidor que cria a UI no cliente e gerencia tudo
+-- Coloque este script no ServerScriptService
+
 local Players = game:GetService("Players")
 local MarketplaceService = game:GetService("MarketplaceService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
 
--- Cria RemoteFunction para o cliente requisitar a lista, se não existir
+-- Cria RemoteFunction se não existir
 local fetchProducts = ReplicatedStorage:FindFirstChild("FetchDevProducts")
 if not fetchProducts then
     fetchProducts = Instance.new("RemoteFunction")
@@ -14,19 +17,18 @@ end
 -- Função para buscar Developer Products via API Roblox
 local function getDeveloperProducts()
     local productList = {}
-    local universeId = game.GameId -- universeId correto para API
+    local universeId = game.GameId
 
     local url = string.format("https://apis.roblox.com/developergoods/v1/products?universeId=%d", universeId)
 
     local success, response = pcall(function()
-        return HttpService:GetAsync(url, true) -- true para desabilitar cache local
+        return HttpService:GetAsync(url, true)
     end)
 
     if success and response then
         local data = HttpService:JSONDecode(response)
         if data and data.data then
             for _, product in ipairs(data.data) do
-                -- Insere nome e id do produto na lista
                 table.insert(productList, {
                     Name = product.name,
                     Id = product.productId
@@ -47,24 +49,22 @@ fetchProducts.OnServerInvoke = function(player)
     return getDeveloperProducts()
 end
 
--- Função para criar a UI para o jogador
-local function createUI(player)
-    -- Espera o PlayerGui do jogador carregar
+-- Código Lua do LocalScript para a UI, que será criado dinamicamente no cliente
+local localScriptSource = [[
+    local Players = game:GetService("Players")
+    local MarketplaceService = game:GetService("MarketplaceService")
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+    local player = Players.LocalPlayer
     local playerGui = player:WaitForChild("PlayerGui")
 
-    -- Remove UI anterior se existir (evita duplicatas)
-    local existingGui = playerGui:FindFirstChild("FreeDevProductMenu")
-    if existingGui then
-        existingGui:Destroy()
-    end
+    local fetchProducts = ReplicatedStorage:WaitForChild("FetchDevProducts")
 
-    -- Cria ScreenGui
+    -- Cria a UI
     local screenGui = Instance.new("ScreenGui")
     screenGui.Name = "FreeDevProductMenu"
-    screenGui.ResetOnSpawn = false
     screenGui.Parent = playerGui
 
-    -- Frame principal
     local frame = Instance.new("Frame")
     frame.Size = UDim2.new(0, 300, 0, 400)
     frame.Position = UDim2.new(0.5, -150, 0.5, -200)
@@ -72,7 +72,6 @@ local function createUI(player)
     frame.BorderSizePixel = 0
     frame.Parent = screenGui
 
-    -- Título
     local title = Instance.new("TextLabel")
     title.Size = UDim2.new(1, 0, 0, 40)
     title.BackgroundTransparency = 1
@@ -82,7 +81,6 @@ local function createUI(player)
     title.TextColor3 = Color3.new(1, 1, 1)
     title.Parent = frame
 
-    -- ScrollingFrame para lista dos produtos
     local scrollingFrame = Instance.new("ScrollingFrame")
     scrollingFrame.Size = UDim2.new(1, -20, 1, -60)
     scrollingFrame.Position = UDim2.new(0, 10, 0, 50)
@@ -96,16 +94,13 @@ local function createUI(player)
     uiListLayout.Padding = UDim.new(0, 5)
     uiListLayout.Parent = scrollingFrame
 
-    -- Função para atualizar a lista de produtos na UI
     local function refreshProducts()
-        -- Limpa a lista atual de botões
         for _, child in pairs(scrollingFrame:GetChildren()) do
             if child:IsA("TextButton") then
                 child:Destroy()
             end
         end
 
-        -- Pega a lista do servidor
         local productList = fetchProducts:InvokeServer()
 
         for _, product in ipairs(productList) do
@@ -123,17 +118,29 @@ local function createUI(player)
             end)
         end
 
-        -- Ajusta o tamanho do canvas para caber todos os botões
         local contentSize = uiListLayout.AbsoluteContentSize.Y
         scrollingFrame.CanvasSize = UDim2.new(0, 0, 0, contentSize + 10)
     end
 
-    -- Atualiza a UI logo que ela é criada
     refreshProducts()
-end
+]]
 
--- Quando o jogador entrar, cria a UI para ele
+-- Quando o jogador entra, cria o LocalScript com a UI no cliente
 Players.PlayerAdded:Connect(function(player)
+    -- Espera o personagem para garantir PlayerGui pronto
     player.CharacterAdded:Wait()
-    createUI(player)
+
+    local playerGui = player:WaitForChild("PlayerGui")
+
+    -- Remove se já existir
+    local existingGui = playerGui:FindFirstChild("FreeDevProductMenu")
+    if existingGui then
+        existingGui:Destroy()
+    end
+
+    -- Cria um LocalScript dentro do PlayerGui com o código da UI
+    local localScript = Instance.new("LocalScript")
+    localScript.Name = "FreeDevProductLocalScript"
+    localScript.Source = localScriptSource
+    localScript.Parent = playerGui
 end)
