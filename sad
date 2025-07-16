@@ -2,67 +2,77 @@ local Players = game:GetService("Players")
 local MarketplaceService = game:GetService("MarketplaceService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
- 
--- Cria RemoteFunction para passar lista para cliente (se não existir)
+
+-- Cria RemoteFunction para o cliente requisitar a lista, se não existir
 local fetchProducts = ReplicatedStorage:FindFirstChild("FetchDevProducts")
 if not fetchProducts then
     fetchProducts = Instance.new("RemoteFunction")
     fetchProducts.Name = "FetchDevProducts"
     fetchProducts.Parent = ReplicatedStorage
 end
- 
+
 -- Função para buscar Developer Products via API Roblox
 local function getDeveloperProducts()
     local productList = {}
-    local universeId = game.GameId -- universeId é game.GameId, não game.PlaceId
- 
+    local universeId = game.GameId -- universeId correto para API
+
     local url = string.format("https://apis.roblox.com/developergoods/v1/products?universeId=%d", universeId)
- 
+
     local success, response = pcall(function()
-        return HttpService:GetAsync(url, true)
+        return HttpService:GetAsync(url, true) -- true para desabilitar cache local
     end)
- 
+
     if success and response then
         local data = HttpService:JSONDecode(response)
         if data and data.data then
-            for _, product in pairs(data.data) do
+            for _, product in ipairs(data.data) do
+                -- Insere nome e id do produto na lista
                 table.insert(productList, {
                     Name = product.name,
                     Id = product.productId
                 })
             end
+        else
+            warn("Resposta da API inválida ou vazia.")
         end
     else
         warn("Erro ao buscar Developer Products: "..tostring(response))
     end
- 
+
     return productList
 end
- 
+
+-- Define o que o servidor responde quando o cliente pedir os produtos
 fetchProducts.OnServerInvoke = function(player)
     return getDeveloperProducts()
 end
- 
--- Cria UI para jogador quando ele entrar
-Players.PlayerAdded:Connect(function(player)
-    player.CharacterAdded:Wait()
- 
-    -- Espera PlayerGui
+
+-- Função para criar a UI para o jogador
+local function createUI(player)
+    -- Espera o PlayerGui do jogador carregar
     local playerGui = player:WaitForChild("PlayerGui")
- 
-    -- Cria a UI
+
+    -- Remove UI anterior se existir (evita duplicatas)
+    local existingGui = playerGui:FindFirstChild("FreeDevProductMenu")
+    if existingGui then
+        existingGui:Destroy()
+    end
+
+    -- Cria ScreenGui
     local screenGui = Instance.new("ScreenGui")
     screenGui.Name = "FreeDevProductMenu"
     screenGui.ResetOnSpawn = false
     screenGui.Parent = playerGui
- 
+
+    -- Frame principal
     local frame = Instance.new("Frame")
     frame.Size = UDim2.new(0, 300, 0, 400)
     frame.Position = UDim2.new(0.5, -150, 0.5, -200)
     frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
     frame.BorderSizePixel = 0
     frame.Parent = screenGui
- 
+
+    -- Título
     local title = Instance.new("TextLabel")
     title.Size = UDim2.new(1, 0, 0, 40)
     title.BackgroundTransparency = 1
@@ -71,7 +81,8 @@ Players.PlayerAdded:Connect(function(player)
     title.TextSize = 28
     title.TextColor3 = Color3.new(1, 1, 1)
     title.Parent = frame
- 
+
+    -- ScrollingFrame para lista dos produtos
     local scrollingFrame = Instance.new("ScrollingFrame")
     scrollingFrame.Size = UDim2.new(1, -20, 1, -60)
     scrollingFrame.Position = UDim2.new(0, 10, 0, 50)
@@ -80,23 +91,23 @@ Players.PlayerAdded:Connect(function(player)
     scrollingFrame.BackgroundTransparency = 0.5
     scrollingFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
     scrollingFrame.Parent = frame
- 
+
     local uiListLayout = Instance.new("UIListLayout")
     uiListLayout.Padding = UDim.new(0, 5)
     uiListLayout.Parent = scrollingFrame
- 
-    -- Função para atualizar lista
+
+    -- Função para atualizar a lista de produtos na UI
     local function refreshProducts()
-        -- Limpa lista atual
+        -- Limpa a lista atual de botões
         for _, child in pairs(scrollingFrame:GetChildren()) do
             if child:IsA("TextButton") then
                 child:Destroy()
             end
         end
- 
-        -- Pega lista do servidor
+
+        -- Pega a lista do servidor
         local productList = fetchProducts:InvokeServer()
- 
+
         for _, product in ipairs(productList) do
             local button = Instance.new("TextButton")
             button.Size = UDim2.new(1, 0, 0, 40)
@@ -104,18 +115,25 @@ Players.PlayerAdded:Connect(function(player)
             button.TextColor3 = Color3.new(1,1,1)
             button.Font = Enum.Font.Gotham
             button.TextSize = 20
-            button.Text = product.Name.." (ID: "..product.Id..")"
+            button.Text = product.Name .. " (ID: " .. product.Id .. ")"
             button.Parent = scrollingFrame
- 
+
             button.MouseButton1Click:Connect(function()
                 MarketplaceService:PromptProductPurchase(player, product.Id)
             end)
         end
- 
+
+        -- Ajusta o tamanho do canvas para caber todos os botões
         local contentSize = uiListLayout.AbsoluteContentSize.Y
         scrollingFrame.CanvasSize = UDim2.new(0, 0, 0, contentSize + 10)
     end
- 
-    -- Atualiza UI ao entrar
+
+    -- Atualiza a UI logo que ela é criada
     refreshProducts()
+end
+
+-- Quando o jogador entrar, cria a UI para ele
+Players.PlayerAdded:Connect(function(player)
+    player.CharacterAdded:Wait()
+    createUI(player)
 end)
