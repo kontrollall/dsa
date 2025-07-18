@@ -1,343 +1,104 @@
--- ====== ServerScript (ServerScriptService) ======
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local HttpService = game:GetService("HttpService")
-local Players = game:GetService("Players")
-
--- Criar ou obter RemoteFunction para requisição dos produtos
-local fetchProducts = ReplicatedStorage:FindFirstChild("FetchDevProducts")
-if not fetchProducts then
-    fetchProducts = Instance.new("RemoteFunction")
-    fetchProducts.Name = "FetchDevProducts"
-    fetchProducts.Parent = ReplicatedStorage
+-- Função para comprar semente
+local function buySeed(seedName)
+	local args = {seedName}
+	game:GetService("ReplicatedStorage"):WaitForChild("GameEvents"):WaitForChild("BuySeedStock"):FireServer(unpack(args))
 end
 
--- Função para buscar produtos do universo atual via API Roblox
-local function getDeveloperProducts()
-    local universeId = game.GameId
-    local url = ("https://apis.roblox.com/developergoods/v1/products?universeId=%d"):format(universeId)
+-- Carregar biblioteca da interface
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/bloodball/-back-ups-for-libs/main/wizard"))()
+local Window = Library:NewWindow("Credits: TGMANKASKE")
+local Section = Window:NewSection("Auto Buy Seeds")
 
-    local success, response = pcall(function()
-        return HttpService:GetAsync(url, true)
-    end)
+-- Lista de sementes disponíveis
+local seedList = {
+	"Carrot", "Strawberry", "Bluebarry", "Orange", "Tomato", "Corn", "Daffodil", "Watermelon", "Pumpkin",
+	"Apple", "Bamboo", "Coconut", "Cactus", "Dragon Fruit", "Mango", "Grape", "Mushroom", "Pepper",
+	"Cacao", "Beanstalk", "Ember lily", "Sugar Apple", "Burning Bud", "Giant Pinecode"
+}
 
-    if not success then
-        warn("[DevProductServer] Erro na requisição da API:", response)
-        return {}
-    end
+-- Variáveis de controle
+local selectedSeed = seedList[1] -- Valor inicial
+local autoBuyEnabled = false
 
-    local data
-    local ok, decodeErr = pcall(function()
-        data = HttpService:JSONDecode(response)
-    end)
-
-    if not ok or type(data) ~= "table" or not data.data then
-        warn("[DevProductServer] Resposta inválida da API:", decodeErr or "Formato incorreto")
-        return {}
-    end
-
-    local products = {}
-
-    for _, product in ipairs(data.data) do
-        if product.name and product.productId then
-            table.insert(products, {
-                Name = product.name,
-                Id = product.productId,
-            })
-        end
-    end
-
-    return products
-end
-
--- RemoteFunction listener
-fetchProducts.OnServerInvoke = function(player)
-    -- Aqui poderia ter validações, logs, rate limiting, etc.
-    return getDeveloperProducts()
-end
-
-print("[DevProductServer] Script iniciado. Pronto para requisições de produtos.")
-
--- ====== LocalScript (StarterPlayerScripts) ======
-
-local Players = game:GetService("Players")
-local MarketplaceService = game:GetService("MarketplaceService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
-
-local player = Players.LocalPlayer
-local fetchProducts = ReplicatedStorage:WaitForChild("FetchDevProducts")
-local playerGui = player:WaitForChild("PlayerGui")
-
--- Remover UI antiga caso exista
-local oldGui = playerGui:FindFirstChild("DevProductUI")
-if oldGui then oldGui:Destroy() end
-
--- Criar ScreenGui
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "DevProductUI"
-screenGui.Parent = playerGui
-screenGui.ResetOnSpawn = false
-
--- Container principal
-local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 260, 0, 380)
-frame.Position = UDim2.new(0, 30, 0, 30)
-frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-frame.BorderSizePixel = 0
-frame.AnchorPoint = Vector2.new(0, 0)
-frame.Parent = screenGui
-
--- Title
-local title = Instance.new("TextLabel")
-title.Text = "Developer Products"
-title.Size = UDim2.new(1, 0, 0, 40)
-title.BackgroundTransparency = 1
-title.TextColor3 = Color3.fromRGB(220, 220, 220)
-title.Font = Enum.Font.GothamBold
-title.TextSize = 26
-title.Parent = frame
-
--- Status message
-local statusLabel = Instance.new("TextLabel")
-statusLabel.Text = "Clique em 'Refresh' para carregar."
-statusLabel.Size = UDim2.new(1, -20, 0, 24)
-statusLabel.Position = UDim2.new(0, 10, 0, 42)
-statusLabel.BackgroundTransparency = 1
-statusLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
-statusLabel.Font = Enum.Font.Gotham
-statusLabel.TextSize = 16
-statusLabel.TextXAlignment = Enum.TextXAlignment.Left
-statusLabel.Parent = frame
-
--- Produto selecionado label
-local selectedProductLabel = Instance.new("TextLabel")
-selectedProductLabel.Text = "Nenhum produto selecionado"
-selectedProductLabel.Size = UDim2.new(1, -20, 0, 26)
-selectedProductLabel.Position = UDim2.new(0, 10, 0, 70)
-selectedProductLabel.BackgroundTransparency = 1
-selectedProductLabel.TextColor3 = Color3.fromRGB(230, 230, 230)
-selectedProductLabel.Font = Enum.Font.GothamSemibold
-selectedProductLabel.TextSize = 18
-selectedProductLabel.TextXAlignment = Enum.TextXAlignment.Left
-selectedProductLabel.Parent = frame
-
--- Container de produtos com scroll
-local productList = Instance.new("ScrollingFrame")
-productList.Size = UDim2.new(1, -20, 0, 180)
-productList.Position = UDim2.new(0, 10, 0, 100)
-productList.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-productList.BorderSizePixel = 0
-productList.ScrollBarThickness = 8
-productList.CanvasSize = UDim2.new(0, 0, 0, 0)
-productList.Parent = frame
-
-local listLayout = Instance.new("UIListLayout")
-listLayout.SortOrder = Enum.SortOrder.LayoutOrder
-listLayout.Padding = UDim.new(0, 6)
-listLayout.Parent = productList
-
-local listPadding = Instance.new("UIPadding")
-listPadding.PaddingTop = UDim.new(0, 6)
-listPadding.PaddingBottom = UDim.new(0, 6)
-listPadding.PaddingLeft = UDim.new(0, 6)
-listPadding.PaddingRight = UDim.new(0, 6)
-listPadding.Parent = productList
-
--- Botões
-local function createButton(text, posY)
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(1, -20, 0, 38)
-    btn.Position = UDim2.new(0, 10, 0, posY)
-    btn.BackgroundColor3 = Color3.fromRGB(255, 95, 95)
-    btn.BorderSizePixel = 0
-    btn.AutoButtonColor = true
-    btn.Font = Enum.Font.GothamBold
-    btn.TextColor3 = Color3.new(1, 1, 1)
-    btn.TextSize = 20
-    btn.Text = text
-    btn.Parent = frame
-    return btn
-end
-
-local refreshButton = createButton("Refresh", 290)
-local buyButton = createButton("Buy Product", 335)
-local buyAllButton = createButton("Buy All Products", 380)
-
--- Checkbox AutoBuy
-local autoBuyFrame = Instance.new("Frame")
-autoBuyFrame.Size = UDim2.new(1, -20, 0, 30)
-autoBuyFrame.Position = UDim2.new(0, 10, 0, 425)
-autoBuyFrame.BackgroundTransparency = 1
-autoBuyFrame.Parent = frame
-
-local autoBuyCheckbox = Instance.new("ImageButton")
-autoBuyCheckbox.Size = UDim2.new(0, 26, 0, 26)
-autoBuyCheckbox.Position = UDim2.new(0, 0, 0, 2)
-autoBuyCheckbox.BackgroundTransparency = 1
-autoBuyCheckbox.Image = "rbxassetid://7072719141" -- caixa vazia
-autoBuyCheckbox.Parent = autoBuyFrame
-autoBuyCheckbox.Active = true
-autoBuyCheckbox.Selectable = true
-
-local autoBuyLabel = Instance.new("TextLabel")
-autoBuyLabel.Text = "Auto Buy Selected"
-autoBuyLabel.Position = UDim2.new(0, 30, 0, 0)
-autoBuyLabel.Size = UDim2.new(1, -30, 1, 0)
-autoBuyLabel.BackgroundTransparency = 1
-autoBuyLabel.TextColor3 = Color3.new(1, 1, 1)
-autoBuyLabel.Font = Enum.Font.Gotham
-autoBuyLabel.TextSize = 20
-autoBuyLabel.TextXAlignment = Enum.TextXAlignment.Left
-autoBuyLabel.Parent = autoBuyFrame
-
--- Variáveis estado
-local products = {}
-local selectedProduct = nil
-local autoBuyActive = false
-local autoBuyCoroutine = nil
-
--- Função para criar botão de produto
-local function createProductButton(product)
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(1, 0, 0, 32)
-    btn.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
-    btn.BorderSizePixel = 0
-    btn.AutoButtonColor = true
-    btn.Font = Enum.Font.GothamSemibold
-    btn.TextColor3 = Color3.new(1, 1, 1)
-    btn.TextSize = 17
-    btn.Text = product.Name
-    btn.Parent = productList
-
-    btn.MouseEnter:Connect(function()
-        btn.BackgroundColor3 = Color3.fromRGB(110, 40, 40)
-    end)
-    btn.MouseLeave:Connect(function()
-        btn.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
-    end)
-
-    btn.MouseButton1Click:Connect(function()
-        selectedProduct = product
-        selectedProductLabel.Text = "Selecionado: " .. product.Name
-        statusLabel.Text = "Produto selecionado para compra/auto-buy."
-    end)
-
-    return btn
-end
-
--- Limpar e atualizar lista de produtos
-local function refreshProductList()
-    statusLabel.Text = "Carregando produtos..."
-    -- Desabilitar botões enquanto carrega
-    refreshButton.AutoButtonColor = false
-    buyButton.AutoButtonColor = false
-    buyAllButton.AutoButtonColor = false
-
-    -- Limpar lista atual
-    for _, child in pairs(productList:GetChildren()) do
-        if child:IsA("TextButton") then
-            child:Destroy()
-        end
-    end
-
-    local success, result = pcall(function()
-        return fetchProducts:InvokeServer()
-    end)
-
-    if success and type(result) == "table" and #result > 0 then
-        products = result
-        statusLabel.Text = ("Produtos carregados: %d"):format(#products)
-
-        for _, product in ipairs(products) do
-            createProductButton(product)
-        end
-
-        -- Atualizar CanvasSize
-        local contentSize = listLayout.AbsoluteContentSize
-        productList.CanvasSize = UDim2.new(0, 0, 0, contentSize.Y + 10)
-    else
-        statusLabel.Text = "Nenhum produto encontrado ou erro na API."
-        products = {}
-    end
-
-    -- Reabilitar botões
-    refreshButton.AutoButtonColor = true
-    buyButton.AutoButtonColor = true
-    buyAllButton.AutoButtonColor = true
-end
-
--- Função para comprar produto selecionado
-local function buyProduct(product)
-    if not product then
-        statusLabel.Text = "Nenhum produto selecionado para comprar."
-        return
-    end
-
-    -- Prompt para comprar
-    MarketplaceService:PromptProductPurchase(player, product.Id)
-    statusLabel.Text = "Prompt de compra aberto para: " .. product.Name
-end
-
--- Função para comprar todos os produtos sequencialmente
-local function buyAllProducts()
-    if #products == 0 then
-        statusLabel.Text = "Nenhum produto para comprar."
-        return
-    end
-
-    statusLabel.Text = "Comprando todos os produtos (um a um)..."
-    for i, product in ipairs(products) do
-        MarketplaceService:PromptProductPurchase(player, product.Id)
-        statusLabel.Text = ("Comprando %d/%d: %s"):format(i, #products, product.Name)
-        wait(5) -- Esperar 5 segundos entre compras para evitar spam
-    end
-
-    statusLabel.Text = "Compra de todos os produtos concluída."
-end
-
--- Função para alternar AutoBuy
-local function toggleAutoBuy()
-    autoBuyActive = not autoBuyActive
-    if autoBuyActive then
-        if not selectedProduct then
-            statusLabel.Text = "Selecione um produto para Auto Buy."
-            autoBuyActive = false
-            autoBuyCheckbox.Image = "rbxassetid://7072719141" -- vazio
-            return
-        end
-
-        statusLabel.Text = "Auto Buy iniciado para: " .. selectedProduct.Name
-        autoBuyCheckbox.Image = "rbxassetid://7072735407" -- check
-
-        -- Coroutine para comprar a cada 5 segundos
-        autoBuyCoroutine = coroutine.create(function()
-            while autoBuyActive do
-                MarketplaceService:PromptProductPurchase(player, selectedProduct.Id)
-                wait(5)
-            end
-        end)
-
-        coroutine.resume(autoBuyCoroutine)
-    else
-        statusLabel.Text = "Auto Buy parado."
-        autoBuyCheckbox.Image = "rbxassetid://7072719141" -- vazio
-
-        -- Parar coroutine
-        if autoBuyCoroutine and coroutine.status(autoBuyCoroutine) == "suspended" then
-            autoBuyCoroutine = nil
-        end
-    end
-end
-
--- Conexões
-refreshButton.MouseButton1Click:Connect(refreshProductList)
-buyButton.MouseButton1Click:Connect(function()
-    buyProduct(selectedProduct)
+-- Dropdown de seleção da semente
+Section:CreateDropdown("Escolha a Semente", seedList, 1, function(seed)
+	selectedSeed = seed
+	print("Semente selecionada para auto buy:", selectedSeed)
 end)
-buyAllButton.MouseButton1Click:Connect(buyAllProducts)
-autoBuyCheckbox.MouseButton1Click:Connect(toggleAutoBuy)
 
--- Inicializar
-refreshProductList()
+-- Toggle do Auto Buy
+Section:CreateToggle("Auto Buy", function(toggle)
+	autoBuyEnabled = toggle
+	if autoBuyEnabled then
+		print("Auto Buy ativado")
+		-- Inicia loop assíncrono
+		task.spawn(function()
+			while autoBuyEnabled do
+				if selectedSeed then
+					buySeed(selectedSeed)
+				end
+				wait(0.2) -- tempo entre compras (ajustável)
+			end
+		end)
+	else
+		print("Auto Buy desativado")
+	end
+end)
+
+
+
+Section:CreateToggle("Auto Collect", function(no)
+_G.GetWins = no
+while _G.GetWins== true do
+    wait(0.3)
+ 
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+ 
+local TRIGGER_DISTANCE = 10
+local activated = {}
+ 
+local function getRoot()
+	local character = player.Character or player.CharacterAdded:Wait()
+	return character:WaitForChild("HumanoidRootPart")
+end
+ 
+local function isPromptClose(prompt, root)
+	local part = prompt.Parent
+	if part and part:IsA("BasePart") then
+		return (part.Position - root.Position).Magnitude <= TRIGGER_DISTANCE
+	end
+	return false
+end
+ 
+local function activatePrompt(prompt)
+	if not activated[prompt] and prompt.Enabled and prompt.ActionText == "Collect" then
+		activated[prompt] = true
+		task.defer(function()
+			prompt:InputHoldBegin()
+			task.wait(prompt.HoldDuration + 0.05)
+			prompt:InputHoldEnd()
+		end)
+	end
+end
+ 
+local function activateNearbyPrompts(root)
+	for _, prompt in ipairs(workspace:GetDescendants()) do
+		if prompt:IsA("ProximityPrompt") and prompt.ActionText == "Collect" then
+			if isPromptClose(prompt, root) then
+				activatePrompt(prompt)
+			end
+		end
+	end
+end
+ 
+workspace.DescendantAdded:Connect(function(descendant)
+	if descendant:IsA("ProximityPrompt") and descendant.ActionText == "Collect" then
+		local root = getRoot()
+		if isPromptClose(descendant, root) then
+			activatePrompt(descendant)
+		end
+	end
+end)
