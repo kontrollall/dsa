@@ -1,4 +1,4 @@
--- Função para comprar semente, com verificação se evento existe
+-- Função para comprar semente
 local function buySeed(seedName)
     local replicatedStorage = game:GetService("ReplicatedStorage")
     local gameEvents = replicatedStorage:FindFirstChild("GameEvents")
@@ -13,11 +13,10 @@ local function buySeed(seedName)
         return
     end
 
-    local args = {seedName}
-    buySeedEvent:FireServer(unpack(args))
+    buySeedEvent:FireServer(seedName)
 end
 
--- Carregar biblioteca da interface com tratamento de erro
+-- Carregar biblioteca da interface
 local httpResult = game:HttpGet("https://raw.githubusercontent.com/bloodball/-back-ups-for-libs/main/wizard")
 local loadedFunction, loadErr = loadstring(httpResult)
 if not loadedFunction then
@@ -41,17 +40,17 @@ local seedList = {
     "Cacao", "Beanstalk", "Ember lily", "Sugar Apple", "Burning Bud", "Giant Pinecode"
 }
 
--- Variáveis de controle Auto Buy
-local selectedSeed = seedList[1] -- Valor inicial
+-- Variáveis
+local selectedSeed = seedList[1]
 local autoBuyEnabled = false
 
--- Dropdown para seleção da semente (seleção única)
+-- Dropdown para escolher semente
 Section:CreateDropdown("Escolha a Semente", seedList, 1, function(seed)
     selectedSeed = seed
     print("[AutoBuy] Semente selecionada:", selectedSeed)
 end)
 
--- Toggle para ativar/desativar Auto Buy
+-- Auto Buy toggle
 Section:CreateToggle("Auto Buy", function(toggle)
     autoBuyEnabled = toggle
     if autoBuyEnabled then
@@ -61,7 +60,7 @@ Section:CreateToggle("Auto Buy", function(toggle)
                 if selectedSeed then
                     buySeed(selectedSeed)
                 end
-                task.wait(0.2) -- intervalo entre compras
+                task.wait(0.2)
             end
         end)
     else
@@ -69,24 +68,16 @@ Section:CreateToggle("Auto Buy", function(toggle)
     end
 end)
 
--- Variável para controlar velocidade do Auto Collect (em segundos)
-local autoCollectSpeed = 0.5 -- padrão, ajustável pelo slider
-
--- Slider para ajustar velocidade do Auto Collect
-Section:CreateSlider("Velocidade Auto Collect (s)", 0.1, 2, autoCollectSpeed, function(value)
-    autoCollectSpeed = value
-    print("[AutoCollect] Velocidade ajustada para:", autoCollectSpeed, "segundos")
-end)
-
--- Variáveis e funções para Auto Collect otimizado
+-- Novo Auto Collect otimizado (sem lag)
 local autoCollectEnabled = false
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
-local TRIGGER_DISTANCE = 10
-local activated = {}
-local proximityPrompts = {}
 local RunService = game:GetService("RunService")
-local lastCheckTime = 0
+
+local activated = {}
+local TRIGGER_DISTANCE = 10
+local validPrompts = {}
+local heartbeatConnection
 
 local function getRoot()
     local character = player.Character or player.CharacterAdded:Wait()
@@ -95,10 +86,7 @@ end
 
 local function isPromptClose(prompt, root)
     local part = prompt.Parent
-    if part and part:IsA("BasePart") then
-        return (part.Position - root.Position).Magnitude <= TRIGGER_DISTANCE
-    end
-    return false
+    return part and part:IsA("BasePart") and (part.Position - root.Position).Magnitude <= TRIGGER_DISTANCE
 end
 
 local function activatePrompt(prompt)
@@ -106,73 +94,55 @@ local function activatePrompt(prompt)
         activated[prompt] = true
         task.defer(function()
             prompt:InputHoldBegin()
-            task.wait(prompt.HoldDuration + 0.2)
+            task.wait(prompt.HoldDuration + 0.1)
             prompt:InputHoldEnd()
             activated[prompt] = nil
         end)
     end
 end
 
-local function refreshNearbyPrompts(root)
-    proximityPrompts = {}
-    for _, prompt in ipairs(workspace:GetDescendants()) do
-        if prompt:IsA("ProximityPrompt") and prompt.ActionText == "Collect" then
-            if isPromptClose(prompt, root) then
-                table.insert(proximityPrompts, prompt)
-            end
-        end
+local function scanPrompt(prompt)
+    if prompt:IsA("ProximityPrompt") and prompt.ActionText == "Collect" then
+        table.insert(validPrompts, prompt)
     end
 end
 
--- Controle do Auto Collect com otimização
+-- Auto Collect Toggle
 Section:CreateToggle("Auto Collect", function(enabled)
     autoCollectEnabled = enabled
 
-    if autoCollectEnabled then
+    if enabled then
         print("[AutoCollect] Ativado")
+        validPrompts = {}
 
-        local rootSuccess, root = pcall(getRoot)
-        if not rootSuccess or not root then
-            warn("[AutoCollect] Falha ao obter HumanoidRootPart")
-            autoCollectEnabled = false
-            return
+        for _, obj in ipairs(workspace:GetDescendants()) do
+            scanPrompt(obj)
         end
 
-        refreshNearbyPrompts(root)
+        -- Quando um novo prompt aparecer
+        workspace.DescendantAdded:Connect(function(descendant)
+            if autoCollectEnabled then
+                scanPrompt(descendant)
+            end
+        end)
 
-        local lastRootPos = root.Position
-        local heartbeatConnection
-
+        -- Loop principal leve
+        local root = getRoot()
         heartbeatConnection = RunService.Heartbeat:Connect(function()
             if not autoCollectEnabled then
-                heartbeatConnection:Disconnect()
+                if heartbeatConnection then heartbeatConnection:Disconnect() end
                 return
             end
-
-            local now = tick()
-            if (root.Position - lastRootPos).Magnitude > 2 or (now - lastCheckTime) > autoCollectSpeed then
-                lastCheckTime = now
-                lastRootPos = root.Position
-
-                for _, prompt in ipairs(proximityPrompts) do
+            for _, prompt in ipairs(validPrompts) do
+                if isPromptClose(prompt, root) then
                     activatePrompt(prompt)
                 end
-
-                refreshNearbyPrompts(root)
             end
         end)
-
-        workspace.DescendantAdded:Connect(function(descendant)
-            if autoCollectEnabled and descendant:IsA("ProximityPrompt") and descendant.ActionText == "Collect" then
-                if root and isPromptClose(descendant, root) then
-                    activatePrompt(descendant)
-                end
-            end
-        end)
-
     else
         print("[AutoCollect] Desativado")
+        if heartbeatConnection then heartbeatConnection:Disconnect() end
+        validPrompts = {}
         activated = {}
-        proximityPrompts = {}
     end
 end)
