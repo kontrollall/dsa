@@ -1,4 +1,4 @@
--- Função para comprar semente
+
 local function buySeed(seedName)
     local replicatedStorage = game:GetService("ReplicatedStorage")
     local gameEvents = replicatedStorage:FindFirstChild("GameEvents")
