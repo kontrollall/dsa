@@ -1,12 +1,27 @@
-
 -- Função para comprar semente
 local function buySeed(seedName)
-	local args = {seedName}
-	game:GetService("ReplicatedStorage"):WaitForChild("GameEvents"):WaitForChild("BuySeedStock"):FireServer(unpack(args))
+	local replicatedStorage = game:GetService("ReplicatedStorage")
+	local gameEvents = replicatedStorage:WaitForChild("GameEvents")
+	local buySeedEvent = gameEvents:WaitForChild("BuySeedStock")
+
+	if buySeedEvent and buySeedEvent.FireServer then
+		local args = {seedName}
+		buySeedEvent:FireServer(unpack(args))
+	else
+		warn("Evento BuySeedStock não encontrado ou inválido")
+	end
 end
 
 -- Carregar biblioteca da interface
-local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/bloodball/-back-ups-for-libs/main/wizard"))()
+local success, Library = pcall(function()
+	return loadstring(game:HttpGet("https://raw.githubusercontent.com/bloodball/-back-ups-for-libs/main/wizard"))()
+end)
+
+if not success or not Library then
+	warn("Falha ao carregar biblioteca wizard")
+	return
+end
+
 local Window = Library:NewWindow("Credits: TGMANKASKE")
 local Section = Window:NewSection("Auto Buy Seeds")
 
@@ -32,7 +47,6 @@ Section:CreateToggle("Auto Buy", function(toggle)
 	autoBuyEnabled = toggle
 	if autoBuyEnabled then
 		print("Auto Buy ativado")
-		-- Inicia loop assíncrono
 		task.spawn(function()
 			while autoBuyEnabled do
 				if selectedSeed then
@@ -47,69 +61,75 @@ Section:CreateToggle("Auto Buy", function(toggle)
 end)
 
 
+-- Auto Collect
+local autoCollectEnabled = false
+Section:CreateToggle("Auto Collect", function(enabled)
+	autoCollectEnabled = enabled
+	if autoCollectEnabled then
+		print("Auto Collect ativado")
 
-Section:CreateToggle("Auto Collect", function(no)
-_G.GetWins = no
-while _G.GetWins== true do
-    wait(0.3)
- 
-local Players = game:GetService("Players")
-local player = Players.LocalPlayer
-local RunService = game:GetService("RunService")
- 
-local TRIGGER_DISTANCE = 10
-local activated = {}
- 
-local function getRoot()
-	local character = player.Character or player.CharacterAdded:Wait()
-	return character:WaitForChild("HumanoidRootPart")
-end
- 
-local function isPromptClose(prompt, root)
-	local part = prompt.Parent
-	if part and part:IsA("BasePart") then
-		return (part.Position - root.Position).Magnitude <= TRIGGER_DISTANCE
-	end
-	return false
-end
- 
-local function activatePrompt(prompt)
-	if not activated[prompt] and prompt.Enabled and prompt.ActionText == "Collect" then
-		activated[prompt] = true
-		task.defer(function()
-			prompt:InputHoldBegin()
-			task.wait(prompt.HoldDuration + 0.05)
-			prompt:InputHoldEnd()
-		end)
-	end
-end
- 
-local function activateNearbyPrompts(root)
-	for _, prompt in ipairs(workspace:GetDescendants()) do
-		if prompt:IsA("ProximityPrompt") and prompt.ActionText == "Collect" then
-			if isPromptClose(prompt, root) then
-				activatePrompt(prompt)
+		local Players = game:GetService("Players")
+		local player = Players.LocalPlayer
+		local TRIGGER_DISTANCE = 10
+		local activated = {}
+
+		local function getRoot()
+			local character = player.Character or player.CharacterAdded:Wait()
+			return character:WaitForChild("HumanoidRootPart")
+		end
+
+		local function isPromptClose(prompt, root)
+			local part = prompt.Parent
+			if part and part:IsA("BasePart") then
+				return (part.Position - root.Position).Magnitude <= TRIGGER_DISTANCE
+			end
+			return false
+		end
+
+		local function activatePrompt(prompt)
+			if not activated[prompt] and prompt.Enabled and prompt.ActionText == "Collect" then
+				activated[prompt] = true
+				task.defer(function()
+					prompt:InputHoldBegin()
+					task.wait(prompt.HoldDuration + 0.05)
+					prompt:InputHoldEnd()
+					activated[prompt] = nil -- permitir reativar depois
+				end)
 			end
 		end
-	end
-end
- 
-workspace.DescendantAdded:Connect(function(descendant)
-	if descendant:IsA("ProximityPrompt") and descendant.ActionText == "Collect" then
-		local root = getRoot()
-		if isPromptClose(descendant, root) then
-			activatePrompt(descendant)
+
+		local function activateNearbyPrompts(root)
+			for _, prompt in ipairs(workspace:GetDescendants()) do
+				if prompt:IsA("ProximityPrompt") and prompt.ActionText == "Collect" then
+					if isPromptClose(prompt, root) then
+						activatePrompt(prompt)
+					end
+				end
+			end
 		end
+
+		-- Loop para ativar prompts periodicamente enquanto estiver ligado
+		task.spawn(function()
+			while autoCollectEnabled do
+				local root = getRoot()
+				if root then
+					activateNearbyPrompts(root)
+				end
+				task.wait(0.3)
+			end
+		end)
+
+		-- Conectar novo prompt adicionado ao workspace
+		workspace.DescendantAdded:Connect(function(descendant)
+			if autoCollectEnabled and descendant:IsA("ProximityPrompt") and descendant.ActionText == "Collect" then
+				local root = getRoot()
+				if root and isPromptClose(descendant, root) then
+					activatePrompt(descendant)
+				end
+			end
+		end)
+
+	else
+		print("Auto Collect desativado")
 	end
-end)
- 
-local function onCharacterLoaded()
-	local root = getRoot()
-	activateNearbyPrompts(root)
-end
- 
-player.CharacterAdded:Connect(onCharacterLoaded)
-onCharacterLoaded()
- 
-end
 end)
