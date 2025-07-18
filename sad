@@ -102,3 +102,14 @@ workspace.DescendantAdded:Connect(function(descendant)
 		end
 	end
 end)
+ 
+local function onCharacterLoaded()
+	local root = getRoot()
+	activateNearbyPrompts(root)
+end
+ 
+player.CharacterAdded:Connect(onCharacterLoaded)
+onCharacterLoaded()
+ 
+end
+end)
