@@ -1,4 +1,3 @@
-
 local function buySeed(seedName)
     local replicatedStorage = game:GetService("ReplicatedStorage")
     local gameEvents = replicatedStorage:FindFirstChild("GameEvents")
@@ -119,14 +118,12 @@ Section:CreateToggle("Auto Collect", function(enabled)
             scanPrompt(obj)
         end
 
-        -- Quando um novo prompt aparecer
         workspace.DescendantAdded:Connect(function(descendant)
             if autoCollectEnabled then
                 scanPrompt(descendant)
             end
         end)
 
-        -- Loop principal leve
         local root = getRoot()
         heartbeatConnection = RunService.Heartbeat:Connect(function()
             if not autoCollectEnabled then
@@ -145,4 +142,32 @@ Section:CreateToggle("Auto Collect", function(enabled)
         validPrompts = {}
         activated = {}
     end
+end)
+
+-- Botão aprimorado: Sell All com TP suave e retorno
+local TweenService = game:GetService("TweenService")
+
+Section:CreateButton("Sell All", function()
+    local character = player.Character or player.CharacterAdded:Wait()
+    local rootPart = character:WaitForChild("HumanoidRootPart")
+    local originalCFrame = rootPart.CFrame
+    local sellPosition = Vector3.new(87, 3, 0) -- posição do botão sell
+
+    local tweenInfo = TweenInfo.new(1, Enum.EasingStyle.Linear)
+    local toSellTween = TweenService:Create(rootPart, tweenInfo, {CFrame = CFrame.new(sellPosition)})
+    toSellTween:Play()
+
+    -- Após 1 segundo, vender e retornar
+    task.delay(1, function()
+        local sellEvent = game:GetService("ReplicatedStorage"):WaitForChild("GameEvents"):FindFirstChild("Sell_Inventory")
+        if sellEvent and sellEvent:IsA("RemoteEvent") then
+            sellEvent:FireServer()
+            print("[Sell All] Inventário vendido.")
+        else
+            warn("[Sell All] RemoteEvent 'Sell_Inventory' não encontrado.")
+        end
+
+        local returnTween = TweenService:Create(rootPart, tweenInfo, {CFrame = originalCFrame})
+        returnTween:Play()
+    end)
 end)
