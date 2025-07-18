@@ -1,25 +1,34 @@
--- Função para comprar semente
+-- Função para comprar semente, com verificação se evento existe
 local function buySeed(seedName)
-	local replicatedStorage = game:GetService("ReplicatedStorage")
-	local gameEvents = replicatedStorage:WaitForChild("GameEvents")
-	local buySeedEvent = gameEvents:WaitForChild("BuySeedStock")
+    local replicatedStorage = game:GetService("ReplicatedStorage")
+    local gameEvents = replicatedStorage:FindFirstChild("GameEvents")
+    if not gameEvents then
+        warn("[buySeed] GameEvents não encontrado em ReplicatedStorage")
+        return
+    end
 
-	if buySeedEvent and buySeedEvent.FireServer then
-		local args = {seedName}
-		buySeedEvent:FireServer(unpack(args))
-	else
-		warn("Evento BuySeedStock não encontrado ou inválido")
-	end
+    local buySeedEvent = gameEvents:FindFirstChild("BuySeedStock")
+    if not buySeedEvent or type(buySeedEvent.FireServer) ~= "function" then
+        warn("[buySeed] BuySeedStock não encontrado ou inválido")
+        return
+    end
+
+    local args = {seedName}
+    buySeedEvent:FireServer(unpack(args))
 end
 
--- Carregar biblioteca da interface
-local success, Library = pcall(function()
-	return loadstring(game:HttpGet("https://raw.githubusercontent.com/bloodball/-back-ups-for-libs/main/wizard"))()
-end)
+-- Carregar biblioteca da interface com tratamento de erro
+local httpResult = game:HttpGet("https://raw.githubusercontent.com/bloodball/-back-ups-for-libs/main/wizard")
+local loadedFunction, loadErr = loadstring(httpResult)
+if not loadedFunction then
+    warn("[Wizard] Falha ao carregar script wizard:", loadErr)
+    return
+end
 
+local success, Library = pcall(loadedFunction)
 if not success or not Library then
-	warn("Falha ao carregar biblioteca wizard")
-	return
+    warn("[Wizard] Falha ao executar script wizard")
+    return
 end
 
 local Window = Library:NewWindow("Credits: TGMANKASKE")
@@ -27,109 +36,108 @@ local Section = Window:NewSection("Auto Buy Seeds")
 
 -- Lista de sementes disponíveis
 local seedList = {
-	"Carrot", "Strawberry", "Bluebarry", "Orange", "Tomato", "Corn", "Daffodil", "Watermelon", "Pumpkin",
-	"Apple", "Bamboo", "Coconut", "Cactus", "Dragon Fruit", "Mango", "Grape", "Mushroom", "Pepper",
-	"Cacao", "Beanstalk", "Ember lily", "Sugar Apple", "Burning Bud", "Giant Pinecode"
+    "Carrot", "Strawberry", "Bluebarry", "Orange", "Tomato", "Corn", "Daffodil", "Watermelon", "Pumpkin",
+    "Apple", "Bamboo", "Coconut", "Cactus", "Dragon Fruit", "Mango", "Grape", "Mushroom", "Pepper",
+    "Cacao", "Beanstalk", "Ember lily", "Sugar Apple", "Burning Bud", "Giant Pinecode"
 }
 
 -- Variáveis de controle
 local selectedSeed = seedList[1] -- Valor inicial
 local autoBuyEnabled = false
 
--- Dropdown de seleção da semente
+-- Dropdown para seleção da semente (seleção única)
 Section:CreateDropdown("Escolha a Semente", seedList, 1, function(seed)
-	selectedSeed = seed
-	print("Semente selecionada para auto buy:", selectedSeed)
+    selectedSeed = seed
+    print("[AutoBuy] Semente selecionada:", selectedSeed)
 end)
 
--- Toggle do Auto Buy
+-- Toggle para ativar/desativar Auto Buy
 Section:CreateToggle("Auto Buy", function(toggle)
-	autoBuyEnabled = toggle
-	if autoBuyEnabled then
-		print("Auto Buy ativado")
-		task.spawn(function()
-			while autoBuyEnabled do
-				if selectedSeed then
-					buySeed(selectedSeed)
-				end
-				wait(0.2) -- tempo entre compras (ajustável)
-			end
-		end)
-	else
-		print("Auto Buy desativado")
-	end
+    autoBuyEnabled = toggle
+    if autoBuyEnabled then
+        print("[AutoBuy] Ativado")
+        task.spawn(function()
+            while autoBuyEnabled do
+                if selectedSeed then
+                    buySeed(selectedSeed)
+                end
+                task.wait(0.2) -- intervalo entre compras
+            end
+        end)
+    else
+        print("[AutoBuy] Desativado")
+    end
 end)
-
 
 -- Auto Collect
 local autoCollectEnabled = false
 Section:CreateToggle("Auto Collect", function(enabled)
-	autoCollectEnabled = enabled
-	if autoCollectEnabled then
-		print("Auto Collect ativado")
+    autoCollectEnabled = enabled
+    if autoCollectEnabled then
+        print("[AutoCollect] Ativado")
 
-		local Players = game:GetService("Players")
-		local player = Players.LocalPlayer
-		local TRIGGER_DISTANCE = 10
-		local activated = {}
+        local Players = game:GetService("Players")
+        local player = Players.LocalPlayer
+        local TRIGGER_DISTANCE = 10
+        local activated = {}
 
-		local function getRoot()
-			local character = player.Character or player.CharacterAdded:Wait()
-			return character:WaitForChild("HumanoidRootPart")
-		end
+        local function getRoot()
+            local character = player.Character or player.CharacterAdded:Wait()
+            return character:WaitForChild("HumanoidRootPart")
+        end
 
-		local function isPromptClose(prompt, root)
-			local part = prompt.Parent
-			if part and part:IsA("BasePart") then
-				return (part.Position - root.Position).Magnitude <= TRIGGER_DISTANCE
-			end
-			return false
-		end
+        local function isPromptClose(prompt, root)
+            local part = prompt.Parent
+            if part and part:IsA("BasePart") then
+                return (part.Position - root.Position).Magnitude <= TRIGGER_DISTANCE
+            end
+            return false
+        end
 
-		local function activatePrompt(prompt)
-			if not activated[prompt] and prompt.Enabled and prompt.ActionText == "Collect" then
-				activated[prompt] = true
-				task.defer(function()
-					prompt:InputHoldBegin()
-					task.wait(prompt.HoldDuration + 0.05)
-					prompt:InputHoldEnd()
-					activated[prompt] = nil -- permitir reativar depois
-				end)
-			end
-		end
+        local function activatePrompt(prompt)
+            if not activated[prompt] and prompt.Enabled and prompt.ActionText == "Collect" then
+                activated[prompt] = true
+                task.defer(function()
+                    prompt:InputHoldBegin()
+                    task.wait(prompt.HoldDuration + 0.05)
+                    prompt:InputHoldEnd()
+                    activated[prompt] = nil -- permitir reativar depois
+                end)
+            end
+        end
 
-		local function activateNearbyPrompts(root)
-			for _, prompt in ipairs(workspace:GetDescendants()) do
-				if prompt:IsA("ProximityPrompt") and prompt.ActionText == "Collect" then
-					if isPromptClose(prompt, root) then
-						activatePrompt(prompt)
-					end
-				end
-			end
-		end
+        local function activateNearbyPrompts(root)
+            for _, prompt in ipairs(workspace:GetDescendants()) do
+                if prompt:IsA("ProximityPrompt") and prompt.ActionText == "Collect" then
+                    if isPromptClose(prompt, root) then
+                        activatePrompt(prompt)
+                    end
+                end
+            end
+        end
 
-		-- Loop para ativar prompts periodicamente enquanto estiver ligado
-		task.spawn(function()
-			while autoCollectEnabled do
-				local root = getRoot()
-				if root then
-					activateNearbyPrompts(root)
-				end
-				task.wait(0.3)
-			end
-		end)
+        -- Loop para ativar prompts periodicamente enquanto estiver ligado
+        task.spawn(function()
+            while autoCollectEnabled do
+                local success, root = pcall(getRoot)
+                if success and root then
+                    activateNearbyPrompts(root)
+                end
+                task.wait(0.3)
+            end
+        end)
 
-		-- Conectar novo prompt adicionado ao workspace
-		workspace.DescendantAdded:Connect(function(descendant)
-			if autoCollectEnabled and descendant:IsA("ProximityPrompt") and descendant.ActionText == "Collect" then
-				local root = getRoot()
-				if root and isPromptClose(descendant, root) then
-					activatePrompt(descendant)
-				end
-			end
-		end)
+        -- Conectar novo prompt adicionado ao workspace
+        workspace.DescendantAdded:Connect(function(descendant)
+            if autoCollectEnabled and descendant:IsA("ProximityPrompt") and descendant.ActionText == "Collect" then
+                local success, root = pcall(getRoot)
+                if success and root and isPromptClose(descendant, root) then
+                    activatePrompt(descendant)
+                end
+            end
+        end)
 
-	else
-		print("Auto Collect desativado")
-	end
+    else
+        print("[AutoCollect] Desativado")
+    end
 end)
