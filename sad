@@ -69,6 +69,15 @@ Section:CreateToggle("Auto Buy", function(toggle)
     end
 end)
 
+-- Variável para controlar velocidade do Auto Collect (em segundos)
+local autoCollectSpeed = 0.5 -- valor padrão
+
+-- Slider para ajustar velocidade
+Section:CreateSlider("Velocidade Auto Collect (s)", 0.1, 2, 0.3, function(value)
+    autoCollectSpeed = value
+    print("[AutoCollect] Velocidade ajustada para:", autoCollectSpeed, "segundos")
+end)
+
 -- Auto Collect
 local autoCollectEnabled = false
 Section:CreateToggle("Auto Collect", function(enabled)
@@ -123,7 +132,7 @@ Section:CreateToggle("Auto Collect", function(enabled)
                 if success and root then
                     activateNearbyPrompts(root)
                 end
-                task.wait(0.3)
+                task.wait(autoCollectSpeed)
             end
         end)
 
