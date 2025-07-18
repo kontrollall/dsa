@@ -41,7 +41,7 @@ local seedList = {
     "Cacao", "Beanstalk", "Ember lily", "Sugar Apple", "Burning Bud", "Giant Pinecode"
 }
 
--- Variáveis de controle
+-- Variáveis de controle Auto Buy
 local selectedSeed = seedList[1] -- Valor inicial
 local autoBuyEnabled = false
 
@@ -70,77 +70,101 @@ Section:CreateToggle("Auto Buy", function(toggle)
 end)
 
 -- Variável para controlar velocidade do Auto Collect (em segundos)
-local autoCollectSpeed = 0.5 -- valor padrão
+local autoCollectSpeed = 0.5 -- padrão, ajustável pelo slider
 
--- Slider para ajustar velocidade
-Section:CreateSlider("Velocidade Auto Collect (s)", 0.1, 2, 0.3, function(value)
+-- Slider para ajustar velocidade do Auto Collect
+Section:CreateSlider("Velocidade Auto Collect (s)", 0.1, 2, autoCollectSpeed, function(value)
     autoCollectSpeed = value
     print("[AutoCollect] Velocidade ajustada para:", autoCollectSpeed, "segundos")
 end)
 
--- Auto Collect
+-- Variáveis e funções para Auto Collect otimizado
 local autoCollectEnabled = false
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local TRIGGER_DISTANCE = 10
+local activated = {}
+local proximityPrompts = {}
+local RunService = game:GetService("RunService")
+local lastCheckTime = 0
+
+local function getRoot()
+    local character = player.Character or player.CharacterAdded:Wait()
+    return character:WaitForChild("HumanoidRootPart")
+end
+
+local function isPromptClose(prompt, root)
+    local part = prompt.Parent
+    if part and part:IsA("BasePart") then
+        return (part.Position - root.Position).Magnitude <= TRIGGER_DISTANCE
+    end
+    return false
+end
+
+local function activatePrompt(prompt)
+    if not activated[prompt] and prompt.Enabled and prompt.ActionText == "Collect" then
+        activated[prompt] = true
+        task.defer(function()
+            prompt:InputHoldBegin()
+            task.wait(prompt.HoldDuration + 0.2)
+            prompt:InputHoldEnd()
+            activated[prompt] = nil
+        end)
+    end
+end
+
+local function refreshNearbyPrompts(root)
+    proximityPrompts = {}
+    for _, prompt in ipairs(workspace:GetDescendants()) do
+        if prompt:IsA("ProximityPrompt") and prompt.ActionText == "Collect" then
+            if isPromptClose(prompt, root) then
+                table.insert(proximityPrompts, prompt)
+            end
+        end
+    end
+end
+
+-- Controle do Auto Collect com otimização
 Section:CreateToggle("Auto Collect", function(enabled)
     autoCollectEnabled = enabled
+
     if autoCollectEnabled then
         print("[AutoCollect] Ativado")
 
-        local Players = game:GetService("Players")
-        local player = Players.LocalPlayer
-        local TRIGGER_DISTANCE = 10
-        local activated = {}
-
-        local function getRoot()
-            local character = player.Character or player.CharacterAdded:Wait()
-            return character:WaitForChild("HumanoidRootPart")
+        local rootSuccess, root = pcall(getRoot)
+        if not rootSuccess or not root then
+            warn("[AutoCollect] Falha ao obter HumanoidRootPart")
+            autoCollectEnabled = false
+            return
         end
 
-        local function isPromptClose(prompt, root)
-            local part = prompt.Parent
-            if part and part:IsA("BasePart") then
-                return (part.Position - root.Position).Magnitude <= TRIGGER_DISTANCE
+        refreshNearbyPrompts(root)
+
+        local lastRootPos = root.Position
+        local heartbeatConnection
+
+        heartbeatConnection = RunService.Heartbeat:Connect(function()
+            if not autoCollectEnabled then
+                heartbeatConnection:Disconnect()
+                return
             end
-            return false
-        end
 
-        local function activatePrompt(prompt)
-            if not activated[prompt] and prompt.Enabled and prompt.ActionText == "Collect" then
-                activated[prompt] = true
-                task.defer(function()
-                    prompt:InputHoldBegin()
-                    task.wait(prompt.HoldDuration + 0.2)
-                    prompt:InputHoldEnd()
-                    activated[prompt] = nil -- permitir reativar depois
-                end)
-            end
-        end
+            local now = tick()
+            if (root.Position - lastRootPos).Magnitude > 2 or (now - lastCheckTime) > autoCollectSpeed then
+                lastCheckTime = now
+                lastRootPos = root.Position
 
-        local function activateNearbyPrompts(root)
-            for _, prompt in ipairs(workspace:GetDescendants()) do
-                if prompt:IsA("ProximityPrompt") and prompt.ActionText == "Collect" then
-                    if isPromptClose(prompt, root) then
-                        activatePrompt(prompt)
-                    end
+                for _, prompt in ipairs(proximityPrompts) do
+                    activatePrompt(prompt)
                 end
-            end
-        end
 
-        -- Loop para ativar prompts periodicamente enquanto estiver ligado
-        task.spawn(function()
-            while autoCollectEnabled do
-                local success, root = pcall(getRoot)
-                if success and root then
-                    activateNearbyPrompts(root)
-                end
-                task.wait(autoCollectSpeed)
+                refreshNearbyPrompts(root)
             end
         end)
 
-        -- Conectar novo prompt adicionado ao workspace
         workspace.DescendantAdded:Connect(function(descendant)
             if autoCollectEnabled and descendant:IsA("ProximityPrompt") and descendant.ActionText == "Collect" then
-                local success, root = pcall(getRoot)
-                if success and root and isPromptClose(descendant, root) then
+                if root and isPromptClose(descendant, root) then
                     activatePrompt(descendant)
                 end
             end
@@ -148,5 +172,7 @@ Section:CreateToggle("Auto Collect", function(enabled)
 
     else
         print("[AutoCollect] Desativado")
+        activated = {}
+        proximityPrompts = {}
     end
 end)
