@@ -99,7 +99,7 @@ Section:CreateToggle("Auto Collect", function(enabled)
                 activated[prompt] = true
                 task.defer(function()
                     prompt:InputHoldBegin()
-                    task.wait(prompt.HoldDuration + 0.05)
+                    task.wait(prompt.HoldDuration + 0.2)
                     prompt:InputHoldEnd()
                     activated[prompt] = nil -- permitir reativar depois
                 end)
